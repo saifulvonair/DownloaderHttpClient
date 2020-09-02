@@ -70,7 +70,7 @@
             this.txtUrl.Name = "txtUrl";
             this.txtUrl.Size = new System.Drawing.Size(465, 20);
             this.txtUrl.TabIndex = 3;
-            this.txtUrl.Text = "https://tools.learningcontainer.com/sample-json.json";
+            this.txtUrl.Text = "https://github.com/torvalds/linux/archive/master.zip";
             // 
             // label2
             // 

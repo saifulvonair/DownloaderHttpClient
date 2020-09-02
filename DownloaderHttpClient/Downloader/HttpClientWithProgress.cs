@@ -71,8 +71,17 @@ namespace Downloader
         private async Task DownloadFileFromHttpResponseMessage(HttpResponseMessage response)
         {
             response.EnsureSuccessStatusCode();
-
             var totalBytes = response.Content.Headers.ContentLength;
+
+            if(totalBytes == null)
+            {
+                // Sometimes it fail to get the size so use this
+                WebClient wc = new WebClient();
+                wc.OpenRead(_downloadUrl);
+                Int64 bytes_total = Convert.ToInt64(wc.ResponseHeaders["Content-Length"]);
+                totalBytes = bytes_total;
+                //
+            }
 
             using (var contentStream = await response.Content.ReadAsStreamAsync())
                 await ProcessContentStream(totalBytes, contentStream);
