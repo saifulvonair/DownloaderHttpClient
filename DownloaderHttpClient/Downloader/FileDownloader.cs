@@ -37,8 +37,10 @@ namespace Downloader
             string filePath = Directory.GetCurrentDirectory() + "\\" + fileName;
             this.downloadLocation = filePath;
 
-            mHttpClientWithProgress = new HttpClientWithProgress(remoteUri, filePath);
+            mHttpClientWithProgress = new HttpClientWithProgress(remoteUri, filePath, this);
             {
+                this.downloadStatus = "Continue";
+                //
                 mHttpClientWithProgress.ProgressChanged += (totalFileSize, totalBytesDownloaded, progressPercentage) => {
                     //Console.WriteLine($"{progressPercentage}% ({totalBytesDownloaded}/{totalFileSize})");
                     this.uodateStatus($"{progressPercentage}% ({totalBytesDownloaded}/{totalFileSize})");
@@ -47,6 +49,8 @@ namespace Downloader
                         this.onComplete(this, new AsyncCompletedEventArgs(null, false, null));
                     }
                 };
+
+
 
                 await mHttpClientWithProgress.StartDownload();
             }

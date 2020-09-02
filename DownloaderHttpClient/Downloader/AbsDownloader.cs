@@ -146,7 +146,7 @@ namespace Downloader
         }
 
         //
-        protected void uodateStatus(String message)
+        public void uodateStatus(String message)
         {
             if (this.Progress != null)
             {

@@ -29,6 +29,8 @@ namespace Downloader
         private readonly string _downloadUrl;
         private readonly string _destinationFilePath;
         CancellationTokenSource _tokenSource = new CancellationTokenSource();
+        private int _maxTry = 50;
+        AbsDownloader _absDownloader;
 
         //private HttpClient _httpClient;
 
@@ -36,10 +38,11 @@ namespace Downloader
 
         public event ProgressChangedHandler ProgressChanged;
 
-        public HttpClientWithProgress(string downloadUrl, string destinationFilePath)
+        public HttpClientWithProgress(string downloadUrl, string destinationFilePath, AbsDownloader absDownloader)
         {
             _downloadUrl = downloadUrl;
             _destinationFilePath = destinationFilePath;
+            _absDownloader = absDownloader;
         }
 
         public async Task StartDownload()
@@ -52,39 +55,51 @@ namespace Downloader
                                             | SecurityProtocolType.Tls11
                                             | SecurityProtocolType.Tls12
                                             | SecurityProtocolType.Ssl3;
+
+           _httpClient.DefaultRequestHeaders.ExpectContinue = false;
+            HttpResponseMessage response = null;
+            try
+            {
+                response = await _httpClient.GetAsync(
+             _downloadUrl,
+             HttpCompletionOption.ResponseHeadersRead); // Important! ResponseHeadersRead.
+                var totalBytes = response.Content.Headers.ContentLength;
+                if (totalBytes == null && _maxTry >= 0)
+                {
+                    _maxTry--;
+                    _httpClient.Dispose();
+                    _httpClient = null;
+                    //TODO
+                    _absDownloader.uodateStatus("Trying: Out of 10 to: " + _maxTry);
+                    //
+                    await StartDownload();
+                }
+                else
+                {
+                    _maxTry = 10;
+                }
+            }
+            catch (Exception)
+            {
+                if (_maxTry >= 0)
+                {
+                    await StartDownload();
+                }
+            }
             //
-
-            // Your original code.
-            HttpClientHandler aHandler = new HttpClientHandler();
-            aHandler.ClientCertificateOptions = ClientCertificateOption.Automatic;
-            
-            HttpClient aClient = new HttpClient(aHandler);
-            aClient.DefaultRequestHeaders.ExpectContinue = false;
-            HttpResponseMessage response = await aClient.GetAsync(
-                _downloadUrl,
-                HttpCompletionOption.ResponseHeadersRead, _tokenSource.Token); // Important! ResponseHeadersRead.
-
             await DownloadFileFromHttpResponseMessage(response);
-
         }
 
         private async Task DownloadFileFromHttpResponseMessage(HttpResponseMessage response)
         {
-            response.EnsureSuccessStatusCode();
-            var totalBytes = response.Content.Headers.ContentLength;
-
-            if(totalBytes == null)
+            if(response != null)
             {
-                // Sometimes it fail to get the size so use this
-                WebClient wc = new WebClient();
-                wc.OpenRead(_downloadUrl);
-                Int64 bytes_total = Convert.ToInt64(wc.ResponseHeaders["Content-Length"]);
-                totalBytes = bytes_total;
-                //
+                response.EnsureSuccessStatusCode();
+                var totalBytes = response.Content.Headers.ContentLength;
+                using (var contentStream = await response.Content.ReadAsStreamAsync())
+                    await ProcessContentStream(totalBytes, contentStream);
             }
-
-            using (var contentStream = await response.Content.ReadAsStreamAsync())
-                await ProcessContentStream(totalBytes, contentStream);
+            
         }
 
         private async Task ProcessContentStream(long? totalDownloadSize, Stream contentStream)
@@ -98,6 +113,11 @@ namespace Downloader
             {
                 do
                 {
+                    if(totalDownloadSize == null)
+                    {
+                        totalDownloadSize = contentStream.Length;
+                    }
+
                     var bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length);
                     if (bytesRead == 0)
                     {
@@ -117,7 +137,7 @@ namespace Downloader
                     long prog = readCount % 100;
                     if (prog >= 0)
                         TriggerProgressChanged(totalDownloadSize, totalBytesRead);
-
+                  
                     if (_tokenSource.IsCancellationRequested)
                     {
                         return;
